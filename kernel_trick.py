@@ -8,6 +8,7 @@ from tqdm import tqdm_notebook
 from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import train_test_split
 import itertools
+import matplotlib.pyplot as plt
 
 
 class BestFeaturesSelection:
@@ -78,11 +79,12 @@ class BestFeaturesSelection:
 
 
 class KernelTrick(object):
-    def __init__(self, model=LinearRegression, metric=mean_squared_error, feature_selection=None,  *args):
+    def __init__(self, model=LinearRegression, metric=mean_squared_error, feature_selection=None, mode='polynom2',  *args):
         self.feature_selection = feature_selection
         self.model = model
         self.metric = mean_squared_error
         self.args = args
+        self.mode = mode
 
     def __fit_polynom2(self, data):
         result = data.copy()
@@ -95,8 +97,8 @@ class KernelTrick(object):
     def __fit_gaussian(self, data):
         return None
 
-    def fit(self, data, y, mode='polynom2'):
-        if mode == 'polynom2':
+    def fit(self, data, y):
+        if self.mode == 'polynom2':
             X = self.__fit_polynom2(data)
             if self.feature_selection is not None:
                 selector = SelectFromModel(self.model(self.args).fit(X, y))
@@ -107,5 +109,46 @@ class KernelTrick(object):
             model.fit(X_train, y_train)
             return model
 
-        if mode == 'gaussian':
+        if self.mode == 'gaussian':
             return self.__fit_gaussian(data)
+
+    def transform(self, data):
+        if self.mode == 'polynom2':
+            return self.__fit_polynom2(data)
+
+
+def draw_classification(X, y, model=None, transformer=None, title=None):
+    plt.rcParams.update({'font.size': 20})
+    plt.figure(figsize=(12, 8), dpi=300)
+    X_false = X[y == 0]
+    X_true = X[y == 1]
+
+    plt.scatter(X_false.T[0], X_false.T[1], color='red')
+    plt.scatter(X_true.T[0], X_true.T[1], color='blue')
+    plt.xlabel('$x$')
+    plt.ylabel('$y$')
+    if title is None:
+        plt.title('Предсказания классификатора')
+    else:
+        plt.title(title)
+
+    if model is not None:
+        x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
+        y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
+        h = 0.02
+
+        xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                             np.arange(y_min, y_max, h))
+
+        data = np.c_[xx.ravel(), yy.ravel()]
+        df = pd.DataFrame({'x': data.T[0], 'y': data.T[1]})
+        if transformer is not None:
+            df = transformer.transform(df)
+        Z = model.predict_proba(df)[:, 1]
+        Z = Z.reshape(xx.shape)
+        plt.contourf(xx, yy, Z, cmap=plt.cm.RdBu, alpha=0.3)
+
+    plt.show()
+
+
+
